@@ -1,6 +1,6 @@
 import type { BerthEvent, BerthPluginContext } from "@berth/plugin";
 
-import { howItEnded, screenFoot, type BoxAnswer, type BoxRead, type Choice, choicesOnScreen, denyChoice, type GateLike, type GoneSession, type Item, type Known, lastMessage, type Marks, NO_MARKS, openForm, type OpenForm, permissionChoices, resolvedAnswers, resolvedText, type SecretLike, type SessionLike, trackGone, type TranscriptItem } from "./model.ts";
+import { closeAnswers, closeKind, closeText, hasUnsaved, howItEnded, screenFoot, UNSAVED_CHECK, type BoxAnswer, type BoxRead, type Choice, choicesOnScreen, denyChoice, type GateLike, type GoneSession, type Item, type Known, lastMessage, type Marks, NO_MARKS, openForm, type OpenForm, permissionChoices, type SecretLike, type SessionLike, trackGone, type TranscriptItem } from "./model.ts";
 
 // What's on the boxes, and what you did about it. It runs from the plugin's
 // activation, not from a screen, so the sidebar's count is right before you open
@@ -50,7 +50,12 @@ export const subscribe = (l: () => void) => {
 };
 
 let berth: BerthPluginContext;
-const stopped: Record<string, Set<string>> = {};
+// Sessions stopped on purpose, and when: a read already on its way can still list
+// one, so the name stays long enough not to look like a crash on the next read.
+const stopped: Record<string, Map<string, number>> = {};
+const STOPPED_MS = 2 * 60_000;
+const noteStopped = (box: string, name: string) => (stopped[box] ??= new Map()).set(name, Date.now());
+const recentlyStopped = (box: string) => new Set([...(stopped[box] ?? new Map<string, number>())].filter(([, at]) => Date.now() - at < STOPPED_MS).map(([n]) => n));
 const known: Record<string, Record<string, Known>> = {};
 const gone: Record<string, GoneSession[]> = {};
 const timers = new Map<string, number>();
@@ -97,10 +102,8 @@ async function readBox(box: string) {
   // Only a box's latest read lands: an older one answering late is dropped.
   if (reading.get(box) !== turn) return;
   const now = new Date().toISOString();
-  const seen = stopped[box] ?? new Set<string>();
-  const track = trackGone(known[box] ?? {}, sessions, seen, now);
+  const track = trackGone(known[box] ?? {}, sessions, recentlyStopped(box), now);
   known[box] = track.known;
-  stopped[box] = new Set();
   if (track.gone.length) gone[box] = [...(gone[box] ?? []), ...track.gone];
   saveTracked();
   set({ reads: { ...state.reads, [box]: { sessions, gates: gates ?? [], secrets: secrets ?? [], gone: gone[box] ?? [] } }, now: Date.now(), loaded: true });
@@ -128,7 +131,7 @@ export function startFeed(ctx: BerthPluginContext): () => void {
   Object.assign(gone, berth.storage.get<Record<string, GoneSession[]>>("gone", {}));
   const onEvent = (e: BerthEvent) => {
     if (!e.box) return;
-    if (e.type === "session.stopped" && typeof e.data?.name === "string") (stopped[e.box] ??= new Set()).add(e.data.name);
+    if (e.type === "session.stopped" && typeof e.data?.name === "string") noteStopped(e.box, e.data.name);
     soon(e.box);
   };
   const offs = ["agent.*", "session.*", "run.*", "secret.*", "box.*"].map((t) => berth.on(t, onEvent));
@@ -220,37 +223,54 @@ export const snooze = (item: Item, until: number) => mark("snoozed", item.key, u
 const UNDO_MS = 5_000;
 let undoTimer = 0;
 
-async function tellResolved(item: Item, note: string | undefined, detail: Detail | undefined) {
-  if (item.kind === "gate") return decideGate(item, false, resolvedText(note));
-  if (item.kind === "secret" || item.kind === "exited" || item.kind === "gone") return mark("resolved", item.key, Date.now());
-  if (item.kind === "marked") {
-    await berth.orchestrate.send(item.box, item.session!, resolvedText(note), { when: "idle" });
-    return mark("resolved", item.key, Date.now());
+async function stopSession(item: Item) {
+  noteStopped(item.box, item.session!);
+  await berth.api.request(item.box, "DELETE", `sessions/${encodeURIComponent(item.session!)}`);
+  mark("resolved", item.key, Date.now());
+  soon(item.box);
+}
+
+// Nothing to lose: it stops at once and costs no tokens. With unsaved work the
+// agent saves what's worth keeping and closes itself. If the check can't run, it
+// counts as unsaved, because stopping is the one you can't take back.
+async function unsaved(item: Item): Promise<boolean> {
+  const s = item.source as SessionLike;
+  if (!s.location) return true;
+  try {
+    const r = await berth.orchestrate.exec(item.box, s.location, UNSAVED_CHECK, "30s");
+    return r.exit_code !== 0 || hasUnsaved(r.output);
+  } catch {
+    return true;
   }
-  if (detail?.form) return answerForm(item, detail.form.tool, resolvedAnswers(detail.form.questions, note));
-  const deny = detail?.choices && denyChoice(detail.choices);
-  if (deny) {
-    await pressKey(item, deny.key);
-    await berth.orchestrate.send(item.box, item.session!, resolvedText(note), { when: "idle" });
-    return;
+}
+
+async function closeItem(item: Item, note: string | undefined, detail: Detail | undefined) {
+  if (closeKind(item.kind) === "dismiss") return mark("resolved", item.key, Date.now());
+  if (item.kind === "exited" || !(await unsaved(item))) return stopSession(item);
+  if (detail?.screen !== undefined) throw new Error("It has unsaved work and is on a screen of its own, so it can't be told to save. Open the session to close it.");
+  const told = `"${item.title}" has unsaved work, so it's saving and closing itself.`;
+  if (detail?.form) await answerForm(item, detail.form.tool, closeAnswers(detail.form.questions, note));
+  else {
+    const deny = detail?.choices && denyChoice(detail.choices);
+    if (deny) {
+      await pressKey(item, deny.key);
+      await berth.orchestrate.send(item.box, item.session!, closeText(note), { when: "idle" });
+    } else await reply(item, closeText(note));
   }
-  // Nothing can reach an agent held at a screen of its own: words would only
-  // queue behind it, so this just takes the card off.
-  if (detail?.screen !== undefined) return mark("resolved", item.key, Date.now());
-  return reply(item, resolvedText(note));
+  berth.notify("Inbox", told);
 }
 
 // A few seconds to change your mind, then it goes. Hidden meanwhile; closing the
-// app in that time sends nothing, so the card just comes back.
-export function resolve(item: Item, note: string | undefined, onError: (msg: string) => void) {
+// app in that time does nothing, so the card just comes back.
+export function closeSession(item: Item, note: string | undefined) {
   flushUndo();
   const detail = state.details[item.key];
   mark("sent", item.key, Date.now());
   set({ undo: { item, until: Date.now() + UNDO_MS } });
   pendingSend = () => {
-    tellResolved(item, note, detail).catch((err) => {
+    closeItem(item, note, detail).catch((err) => {
       mark("sent", item.key, undefined);
-      onError(errText(err));
+      berth.notify("Couldn't close it", `${item.title}: ${errText(err)}`);
     });
   };
   undoTimer = window.setTimeout(flushUndo, UNDO_MS);
@@ -266,7 +286,7 @@ function flushUndo() {
   send?.();
 }
 
-export function undoResolve() {
+export function undoClose() {
   const u = state.undo;
   window.clearTimeout(undoTimer);
   pendingSend = undefined;

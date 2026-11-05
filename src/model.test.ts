@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { howItEnded, peekRows, screenFoot, answerFor, choicesOnScreen, cleanTitle, denyChoice, didntLand, estimate, holdCurrent, inList, type Item, isRecommended, itemsOf, NO_MARKS, oneLine, openForm, openItems, permissionChoices, resolvedAnswers, RESOLVED_LINE, SENT_GRACE_MS, shownLabel, snoozeTimes, trackGone, walkOrder } from "./model.ts";
+import { howItEnded, peekRows, screenFoot, answerFor, choicesOnScreen, cleanTitle, denyChoice, didntLand, estimate, holdCurrent, inList, type Item, isRecommended, itemsOf, NO_MARKS, oneLine, openForm, openItems, permissionChoices, closeAnswers, CLOSE_LINE, closeKind, hasUnsaved, SENT_GRACE_MS, shownLabel, snoozeTimes, trackGone, walkOrder } from "./model.ts";
 
 const waiting = (name: string, extra = {}) => ({ name, agent: "claude", agent_state: "waiting", state_since: "2026-01-01T10:00:00Z", turn: `${name}#1`, ...extra });
 
@@ -119,11 +119,30 @@ test("notes become one line, and a double quote can't cut the answer short", () 
   assert.equal(answerFor(single, { picks: [], note: 'a "b"' }).other, "a ”b”");
 });
 
-test("resolving answers every question with the fixed line and the note", () => {
-  const a = resolvedAnswers([single, single], "not needed");
+test("closing over a form answers every question with the line and the note", () => {
+  const a = closeAnswers([single, single], "not needed");
   assert.equal(a.length, 2);
-  assert.equal(a[0].other, `${RESOLVED_LINE} Note: not needed`);
-  assert.ok(!RESOLVED_LINE.includes('"'));
+  assert.equal(a[0].other, `${CLOSE_LINE} Note: not needed`);
+  assert.ok(!CLOSE_LINE.includes('"'), "a straight quote would cut it short on the chat driver");
+  assert.ok(CLOSE_LINE.includes("$BERTH_SESSION"));
+  assert.ok(!/\n/.test(CLOSE_LINE), "a box takes one line");
+});
+
+test("a session can be closed, and what has no session can only leave the list", () => {
+  assert.equal(closeKind("wait"), "close");
+  assert.equal(closeKind("marked"), "close");
+  assert.equal(closeKind("exited"), "close");
+  assert.equal(closeKind("secret"), "dismiss");
+  assert.equal(closeKind("gone"), "dismiss");
+  assert.equal(closeKind("gate"), undefined);
+});
+
+test("only an empty check counts as nothing to lose", () => {
+  assert.equal(hasUnsaved(""), false);
+  assert.equal(hasUnsaved("  \n"), false);
+  assert.equal(hasUnsaved(undefined), false);
+  assert.equal(hasUnsaved(" M src/a.ts\n"), true);
+  assert.equal(hasUnsaved("abc123 feat: not pushed\n"), true);
 });
 
 test("an open form is the last question, unless you've spoken since", () => {

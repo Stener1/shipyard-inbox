@@ -4,8 +4,8 @@ import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import { Markdown } from "./markdown.tsx";
-import { ago, answerFor, type Choice, complete, didntLand, type GateLike, GROUPS, isRecommended, type Item, oneLine, type Pick, type Question, shownLabel, snoozeTimes } from "./model.ts";
-import { answerForm, decideGate, type Detail, errText, getState, loadDetail, openSession, pressKey, reply, resolve, resume, snooze, subscribe } from "./store.ts";
+import { ago, closeKind, answerFor, type Choice, complete, didntLand, type GateLike, GROUPS, isRecommended, type Item, oneLine, type Pick, type Question, shownLabel, snoozeTimes } from "./model.ts";
+import { answerForm, decideGate, type Detail, errText, getState, loadDetail, openSession, closeSession, pressKey, reply, resume, snooze, subscribe } from "./store.ts";
 
 // A key is the Inbox's only when you're not typing and no dialog or menu has the
 // keyboard, so Wispr Flow and friends can type into the note. Same rule as the
@@ -105,10 +105,12 @@ export function Card({ berth, item, peekOpen, onPeek }: CardProps) {
     if (canReply && noteText && !busy) void run(() => reply(item, noteText));
   }, [form, submitForm, canReply, noteText, busy, item]);
 
-  const doResolve = useCallback(() => {
+  const closing = closeKind(item.kind);
+  const doClose = useCallback(() => {
+    if (!closing) return;
     drafts.delete(item.key);
-    resolve(item, draft.note, setError);
-  }, [item, draft.note]);
+    closeSession(item, draft.note);
+  }, [item, closing, draft.note]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -149,7 +151,7 @@ export function Card({ berth, item, peekOpen, onPeek }: CardProps) {
         noteRef.current?.focus();
       } else if (e.key === "x") {
         e.preventDefault();
-        doResolve();
+        doClose();
       } else if (e.key === "o") {
         e.preventDefault();
         openSession(item);
@@ -157,7 +159,7 @@ export function Card({ berth, item, peekOpen, onPeek }: CardProps) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [snoozing, item, form, questions, focusQ, toggle, choices, busy, send, doResolve]);
+  }, [snoozing, item, form, questions, focusQ, toggle, choices, busy, send, doClose]);
 
   const groupTitle = useMemo(() => GROUPS.find((g) => g.id === item.group)?.title, [item.group]);
   const where = [item.location, item.box].filter(Boolean).join(" · ");
@@ -326,10 +328,12 @@ export function Card({ berth, item, peekOpen, onPeek }: CardProps) {
               <Key k={form ? "↵" : "⌘↵"} />
             </Button>
           )}
-          <Button variant="ghost" size="sm" data-testid="inbox-resolve" onClick={doResolve}>
-            Resolve without answering
-            <Key k="x" />
-          </Button>
+          {closing && (
+            <Button variant="ghost" size="sm" data-testid="inbox-close" onClick={doClose}>
+              {closing === "close" ? "Close session" : "Dismiss"}
+              <Key k="x" />
+            </Button>
+          )}
           <Button variant="ghost" size="sm" data-testid="inbox-snooze-open" onClick={() => setSnoozing(true)}>
             Snooze
             <Key k="h" />

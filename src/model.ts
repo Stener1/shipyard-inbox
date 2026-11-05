@@ -410,14 +410,26 @@ export function answerFor(q: Question, p: Pick): BoxAnswer {
 
 export const complete = (p: Pick | undefined) => !!p && (p.picks.length > 0 || !!oneLine(p.note ?? ""));
 
-export const RESOLVED_LINE = "Resolved without an answer: don't wait on this, take the safe path or end.";
+// Closing a session with unsaved work: the agent saves what's worth keeping and
+// closes itself. No double quotes: they'd be cut on the chat driver (see oneLine).
+export const CLOSE_LINE = "This session is being closed from the Inbox. Commit and push anything worth keeping, then end by running: berthd session kill $BERTH_SESSION";
 
-export const resolvedText = (note?: string) => {
+export const closeText = (note?: string) => {
   const n = oneLine(note ?? "");
-  return n ? `${RESOLVED_LINE} Note: ${n}` : RESOLVED_LINE;
+  return n ? `${CLOSE_LINE} Note: ${n}` : CLOSE_LINE;
 };
 
-export const resolvedAnswers = (qs: Question[], note?: string): BoxAnswer[] => qs.map(() => ({ other: resolvedText(note) }));
+export const closeAnswers = (qs: Question[], note?: string): BoxAnswer[] => qs.map(() => ({ other: closeText(note) }));
+
+// What the card's second button does. A session can be closed. A secret request or
+// a session already gone can only leave the list. A run gate has its own Reject.
+export const closeKind = (kind: ItemKind): "close" | "dismiss" | undefined => (kind === "gate" ? undefined : kind === "secret" || kind === "gone" ? "dismiss" : "close");
+
+// Prints anything uncommitted, and commits on no remote. Empty means safe to stop.
+// Outside a repository there's nothing to lose this way.
+export const UNSAVED_CHECK = "git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0; git status --porcelain; git log --oneline -5 HEAD --not --remotes";
+
+export const hasUnsaved = (output: string | undefined) => !!output?.trim();
 
 // --- Permission prompts ---
 

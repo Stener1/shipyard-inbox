@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { Card, viewKey } from "./card.tsx";
 import { ago, estimate, holdCurrent, inList, type Item, itemsOf, nextAfter, openItems, snoozedItems, walkOrder } from "./model.ts";
 import { Peek } from "./peek.tsx";
-import { getState, type InboxState, subscribe, undoResolve } from "./store.ts";
+import { getState, type InboxState, subscribe, undoClose } from "./store.ts";
 
 export const allItems = (s: InboxState): Item[] => Object.entries(s.reads).flatMap(([box, read]) => itemsOf(box, read));
 export const openOf = (s: InboxState): Item[] => openItems(allItems(s), s.marks, s.now);
@@ -130,8 +130,8 @@ export function InboxScreen({ berth }: { berth: BerthPluginContext }) {
 
       {state.undo && (
         <div className="flex items-center gap-2 border-t px-4 py-2 text-sm" role="status" data-testid="inbox-undo">
-          <span className="min-w-0 flex-1 truncate">Resolving "{state.undo.item.title}". The agent is told in a few seconds.</span>
-          <Button size="sm" variant="outline" onClick={undoResolve}>
+          <span className="min-w-0 flex-1 truncate">Closing "{state.undo.item.title}" in a few seconds.</span>
+          <Button size="sm" variant="outline" onClick={undoClose}>
             Undo
           </Button>
         </div>

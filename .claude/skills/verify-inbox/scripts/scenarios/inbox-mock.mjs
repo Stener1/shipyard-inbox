@@ -32,6 +32,7 @@ const wrap = (plugin) => (berth) => {
       { kind: "notice", id: "n1", notice: "interrupted", text: "Interrupted" },
     ] });
     if (method === "GET" && path.endsWith("/transcript")) return Promise.resolve({ source: "mock", items: [{ kind: "text", id: "m", text: "Should acme keep the old flag?" }] });
+    if (method === "DELETE" && path.startsWith("sessions/")) { window.__inboxSent.push({ method, path }); return Promise.resolve({}); }
     if (method === "POST" && path.endsWith("/answer")) { window.__inboxSent.push({ path, body }); return Promise.resolve({ answered: [] }); }
     return berth.api.request(box, method, path, body);
   };
@@ -42,7 +43,10 @@ const wrap = (plugin) => (berth) => {
     const list = await berth.api.sessions(box);
     return box === "devl" ? [...list, { name: "old-q", agent: "claude", agent_state: "finished", title: "❓ Pick a colour", location: "shop", state_since: stoppedAt }] : list;
   };
-  const ctx = new Proxy(berth, { get: (t, k) => (k === "api" ? api : t[k]) });
+  // Nothing unsaved anywhere, as far as the check can tell.
+  const orchestrate = Object.create(berth.orchestrate);
+  orchestrate.exec = () => Promise.resolve({ exit_code: 0, output: "" });
+  const ctx = new Proxy(berth, { get: (t, k) => (k === "api" ? api : k === "orchestrate" ? orchestrate : t[k]) });
   return plugin(ctx);
 };
 `;
@@ -164,15 +168,22 @@ export async function run({ page, shot, step, expect }) {
   await shot("7b-interrupted");
   await page.keyboard.press("p");
 
-  step("resolve without answering can be undone, and the card comes back");
-  const now = await title.textContent();
-  await page.getByTestId("inbox-resolve").click();
+  step("close session can be undone, and the card comes back");
+  await page.getByTestId("inbox-close").click();
   const undo = page.getByTestId("inbox-undo");
   await expect(undo).toBeVisible();
   await expect(left).toContainText(`${was - 2} left`);
   await shot("8-undo");
   await undo.getByRole("button", { name: "Undo" }).click();
-  await expect(left).toContainText(`${was - 1} left`);
   await expect(undo).toBeHidden();
-  await expect(page.getByTestId("inbox-item").filter({ hasText: now })).not.toHaveCount(0);
+  await expect(left).toContainText(`${was - 1} left`);
+  await expect(page.getByTestId("inbox-item").filter({ hasText: "Pick a colour" })).toHaveCount(1);
+
+  step("with nothing unsaved it stops the session, after the few seconds");
+  await page.getByTestId("inbox-item").filter({ hasText: "Pick a colour" }).click();
+  await page.getByTestId("inbox-close").click();
+  await expect(undo).toBeHidden({ timeout: 15_000 });
+  await expect.poll(() => page.evaluate(() => window.__inboxSent.some((c) => c.method === "DELETE" && c.path === "sessions/old-q"))).toBe(true);
+  await expect(page.getByTestId("inbox-item").filter({ hasText: "Pick a colour" })).toHaveCount(0);
+  await shot("9-closed");
 }

@@ -8,7 +8,8 @@
 | Answering a form | Number keys pick, recommended is marked, Enter sends. Reaches the agent | `inbox-mock` (payload), `inbox-live` (both drivers) |
 | A pick with a note | Note goes with the pick as one line, double quotes survive | `inbox-live` (both drivers) |
 | Permission prompts | Allow, Always allow, Deny, by key or click. The command runs | `inbox-live` (both drivers) |
-| Resolve without answering | Few seconds to undo, then the agent is told and carries on | `inbox-mock` (undo), `inbox-live` (form and permission, both drivers) |
+| Close session | Few seconds to undo. Nothing unsaved: it stops at once, with no agent turn. Unsaved work: the agent saves it and closes itself | `inbox-mock` (undo, stop), `inbox-live` (clean, form and permission, both drivers) |
+| Dismiss | A secret request or a session already gone leaves the list | Not driven yet |
 | Snooze | `h` then 1/2/3. Leaves the count, shows "N snoozed", returns when due | `inbox-mock`; return in `model.test.ts` |
 | Peek | `p`: the session beside the card, following along, with work folded into one line that opens on a click. The draft stays | `inbox-mock`, `inbox-live` |
 | How a turn ended | An interrupted or failed agent says so on the card and in the peek, whatever its title still claims | `inbox-mock`; rule in `model.test.ts` |
