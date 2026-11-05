@@ -9,7 +9,7 @@
     "test": "node --experimental-strip-types --no-warnings --test src/*.test.ts"
   },
   "devDependencies": {
-    "@berth/plugin": "github:cosscom/shipyard#path:packages/plugin-sdk",
+    "@berth/plugin": "file:vendor/plugin-sdk",
     "@types/node": "^22.0.0",
     "@types/react": "^19.1.8",
     "esbuild": "^0.25.0",

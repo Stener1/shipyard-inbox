@@ -9,8 +9,8 @@ importers:
   .:
     devDependencies:
       '@berth/plugin':
-        specifier: github:cosscom/shipyard#path:packages/plugin-sdk
-        version: https://codeload.github.com/cosscom/shipyard/tar.gz/a6ee436af12210c00aca4a40f8f69955afd18fc1#path:packages/plugin-sdk(@types/react@19.3.0)
+        specifier: file:vendor/plugin-sdk
+        version: file:vendor/plugin-sdk(@types/react@19.3.0)
       '@types/node':
         specifier: ^22.0.0
         version: 22.20.5
@@ -26,9 +26,8 @@ importers:
 
 packages:
 
-  '@berth/plugin@https://codeload.github.com/cosscom/shipyard/tar.gz/a6ee436af12210c00aca4a40f8f69955afd18fc1#path:packages/plugin-sdk':
-    resolution: {gitHosted: true, integrity: sha512-QkqkC1e3mrBw38jzgWINK5HulyHpdQYOkZxtt/irei4/TsezTqzASf5dLqehjlSYFNZwDsqlnWcus4K1ibzmnw==, tarball: https://codeload.github.com/cosscom/shipyard/tar.gz/a6ee436af12210c00aca4a40f8f69955afd18fc1}
-    version: 0.1.0
+  '@berth/plugin@file:vendor/plugin-sdk':
+    resolution: {directory: vendor/plugin-sdk, type: directory}
     peerDependencies:
       '@types/react': ^19
 
@@ -212,7 +211,7 @@ packages:
 
 snapshots:
 
-  '@berth/plugin@https://codeload.github.com/cosscom/shipyard/tar.gz/a6ee436af12210c00aca4a40f8f69955afd18fc1#path:packages/plugin-sdk(@types/react@19.3.0)':
+  '@berth/plugin@file:vendor/plugin-sdk(@types/react@19.3.0)':
     dependencies:
       '@types/react': 19.3.0
 
