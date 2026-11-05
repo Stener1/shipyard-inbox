@@ -1,6 +1,6 @@
 import type { BerthEvent, BerthPluginContext } from "@berth/plugin";
 
-import { screenFoot, type BoxAnswer, type BoxRead, type Choice, choicesOnScreen, denyChoice, type GateLike, type GoneSession, type Item, type Known, lastMessage, type Marks, NO_MARKS, openForm, type OpenForm, permissionChoices, resolvedAnswers, resolvedText, type SecretLike, type SessionLike, trackGone, type TranscriptItem } from "./model.ts";
+import { howItEnded, screenFoot, type BoxAnswer, type BoxRead, type Choice, choicesOnScreen, denyChoice, type GateLike, type GoneSession, type Item, type Known, lastMessage, type Marks, NO_MARKS, openForm, type OpenForm, permissionChoices, resolvedAnswers, resolvedText, type SecretLike, type SessionLike, trackGone, type TranscriptItem } from "./model.ts";
 
 // What's on the boxes, and what you did about it. It runs from the plugin's
 // activation, not from a screen, so the sidebar's count is right before you open
@@ -14,6 +14,8 @@ export interface Detail {
   // The foot of the agent's screen, when it waits on something with no form or
   // options to read, such as a trust prompt.
   screen?: string;
+  // How its last turn ended, when it stopped rather than asked.
+  ended?: string;
   error?: string;
 }
 
@@ -167,7 +169,7 @@ export async function loadDetail(item: Item, tries = 0): Promise<void> {
     const s = item.source as SessionLike;
     const ask = item.kind === "wait" && !form && !s.soft_wait ? await optional(readAsk(item.box, s), { choices: [] as Choice[] }) : { choices: [] as Choice[] };
     const choices = ask.choices;
-    set({ details: { ...state.details, [item.key]: { form, message: lastMessage(items), choices, screen: "screen" in ask ? ask.screen : undefined } } });
+    set({ details: { ...state.details, [item.key]: { form, message: lastMessage(items), choices, ended: howItEnded(items), screen: "screen" in ask ? ask.screen : undefined } } });
     if (item.kind === "wait" && !form && !choices.length && !s.soft_wait && tries < 3) window.setTimeout(() => void loadDetail(item, tries + 1), 800 * 2 ** tries);
   } catch (err) {
     set({ details: { ...state.details, [item.key]: { error: errText(err) } } });

@@ -128,7 +128,7 @@ function fromSession(box: string, s: SessionLike): Item | undefined {
   }
   if (s.agent_state === "running") return undefined;
   if (title.startsWith(BLOCKED_MARK)) return { ...base, kind: "marked", group: "blocked", key: waitKey(box, s), why: "It says it's blocked" };
-  if (title.startsWith(ASKING_MARK)) return { ...base, kind: "marked", group: "decision", key: waitKey(box, s), why: "Its last message asks you something" };
+  if (title.startsWith(ASKING_MARK)) return { ...base, kind: "marked", group: "decision", key: waitKey(box, s), why: "Its title says it's asking" };
   return undefined;
 }
 
@@ -298,6 +298,7 @@ export interface TranscriptItem {
   command?: string;
   detail?: string;
   answers?: string[];
+  notice?: string;
 }
 
 export type OpenForm = TranscriptItem & { tool: string; questions: Question[] };
@@ -318,6 +319,61 @@ export function lastMessage(items: TranscriptItem[]): string | undefined {
     if (it.kind === "user") return undefined;
   }
   return undefined;
+}
+
+// How its last turn ended, when that's the last thing in the record: a person
+// has to know it stopped, whatever its title still says.
+const ENDINGS: Record<string, string> = {
+  interrupted: "It was interrupted, and waits for what to do instead.",
+  exited: "The agent's program ended.",
+  stop_failure: "Its turn ended on a failure.",
+  api_error: "Its turn ended on an API error.",
+  limit: "It hit a usage limit.",
+  rate_limit: "It hit a rate limit.",
+  auth: "It lost its sign-in.",
+  billing: "It stopped on a billing problem.",
+};
+
+export function howItEnded(items: TranscriptItem[]): string | undefined {
+  const last = items[items.length - 1];
+  return last?.kind === "notice" ? (ENDINGS[last.notice ?? ""] ?? last.text) : undefined;
+}
+
+// The record as a chat reads it: runs of tool calls fold into one line, and
+// everything else stays as it is.
+export type PeekRow = { kind: "item"; item: TranscriptItem } | { kind: "work"; id: string; summary: string; items: TranscriptItem[] };
+
+const WORK = new Set(["tools", "edit"]);
+
+function workSummary(items: TranscriptItem[]): string {
+  let ran = 0;
+  let read = 0;
+  let edited = 0;
+  for (const it of items) {
+    if (it.kind === "edit") edited++;
+    else for (const t of it.items?.length ? it.items : [{ verb: it.verb }]) /^read/i.test(t.verb ?? "") ? read++ : ran++;
+  }
+  const n = (c: number, one: string, many: string) => (c ? `${c} ${c === 1 ? one : many}` : "");
+  const parts = [ran && `ran ${n(ran, "command", "commands")}`, read && `read ${n(read, "file", "files")}`, edited && `edited ${n(edited, "file", "files")}`].filter(Boolean);
+  return `Worked · ${parts.join(", ")}`;
+}
+
+export function peekRows(items: TranscriptItem[]): PeekRow[] {
+  const rows: PeekRow[] = [];
+  let run: TranscriptItem[] = [];
+  const flush = () => {
+    if (run.length) rows.push({ kind: "work", id: run[0].id, summary: workSummary(run), items: run });
+    run = [];
+  };
+  for (const it of items) {
+    if (WORK.has(it.kind)) run.push(it);
+    else {
+      flush();
+      rows.push({ kind: "item", item: it });
+    }
+  }
+  flush();
+  return rows;
 }
 
 const RECOMMENDED = /\s*\(\s*recommended\s*\)\s*$/i;

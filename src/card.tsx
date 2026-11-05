@@ -176,7 +176,11 @@ export function Card({ berth, item, peekOpen, onPeek }: CardProps) {
         <h2 className="text-base font-medium" data-testid="inbox-card-title">
           {item.title}
         </h2>
-        {item.why && <p className="text-sm text-muted-foreground">{item.why}</p>}
+        {(detail?.ended ?? item.why) && (
+          <p className="text-sm text-muted-foreground" data-testid="inbox-why">
+            {detail?.ended ?? item.why}
+          </p>
+        )}
       </div>
 
       {didntLand(item, state.marks, state.now) && (

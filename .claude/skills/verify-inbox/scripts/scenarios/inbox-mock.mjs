@@ -24,9 +24,21 @@ const wrap = (plugin) => (berth) => {
   const api = Object.create(berth.api);
   api.request = (box, method, path, body) => {
     if (method === "GET" && path === "sessions/shop-claude/transcript") return Promise.resolve({ source: "mock", items: FORM });
+    if (method === "GET" && path === "sessions/old-q/transcript") return Promise.resolve({ source: "mock", items: [
+      { kind: "user", id: "u1", text: "Pick a colour for acme." },
+      { kind: "question", id: "q1", tool: "t", done: true, questions: [{ question: "Which colour?", options: [{ label: "Blue" }] }], answers: ["Blue"] },
+      { kind: "tools", id: "t1", verb: "Run", items: [{ verb: "Run", target: "pnpm build" }] },
+      { kind: "text", id: "x1", text: "Now the docs." },
+      { kind: "notice", id: "n1", notice: "interrupted", text: "Interrupted" },
+    ] });
     if (method === "GET" && path.endsWith("/transcript")) return Promise.resolve({ source: "mock", items: [{ kind: "text", id: "m", text: "Should acme keep the old flag?" }] });
     if (method === "POST" && path.endsWith("/answer")) { window.__inboxSent.push({ path, body }); return Promise.resolve({ answered: [] }); }
     return berth.api.request(box, method, path, body);
+  };
+  // A session interrupted long ago, whose title still asks.
+  api.sessions = async (box) => {
+    const list = await berth.api.sessions(box);
+    return box === "devl" ? [...list, { name: "old-q", agent: "claude", agent_state: "finished", title: "❓ Pick a colour", location: "shop", state_since: new Date(Date.now() - 7_200_000).toISOString() }] : list;
   };
   const ctx = new Proxy(berth, { get: (t, k) => (k === "api" ? api : t[k]) });
   return plugin(ctx);
@@ -110,6 +122,15 @@ export async function run({ page, shot, step, expect }) {
   await expect(peek).toBeHidden();
   await expect(note).toHaveValue("hjkwpx 12");
 
+  step("work folds into one line that opens on a click");
+  await page.keyboard.press("p");
+  const work = page.getByTestId("inbox-peek").getByTestId("peek-work").first();
+  await expect(work).toContainText("Worked · read 1 file");
+  await expect(page.getByTestId("inbox-peek")).not.toContainText("Read webhook.ts");
+  await work.getByRole("button").click();
+  await expect(page.getByTestId("inbox-peek")).toContainText("Read webhook.ts");
+  await page.keyboard.press("p");
+
   step("walking away and back keeps the draft");
   await page.keyboard.press("j");
   await page.keyboard.press("k");
@@ -131,6 +152,15 @@ export async function run({ page, shot, step, expect }) {
   const want = JSON.stringify([{ path: "sessions/shop-claude/answer", body: { tool: "mock-tool", answers: [{ picks: ["Tuesday (Recommended)"] }, { picks: ["On-call"] }] } }]);
   if (JSON.stringify(sent) !== want) throw new Error(`answer sent: ${JSON.stringify(sent)}`);
   await shot("7-answered-next");
+
+  step("a stale asking title doesn't claim a question: the card says it was interrupted, and so does the peek");
+  await page.getByTestId("inbox-item").filter({ hasText: "Pick a colour" }).click();
+  await expect(title).toHaveText("Pick a colour");
+  await expect(page.getByTestId("inbox-why")).toHaveText("It was interrupted, and waits for what to do instead.");
+  await page.keyboard.press("p");
+  await expect(page.getByTestId("peek-notice")).toHaveText("It was interrupted, and waits for what to do instead.");
+  await shot("7b-interrupted");
+  await page.keyboard.press("p");
 
   step("resolve without answering can be undone, and the card comes back");
   const now = await title.textContent();

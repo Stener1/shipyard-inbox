@@ -10,7 +10,8 @@
 | Permission prompts | Allow, Always allow, Deny, by key or click. The command runs | `inbox-live` (both drivers) |
 | Resolve without answering | Few seconds to undo, then the agent is told and carries on | `inbox-mock` (undo), `inbox-live` (form and permission, both drivers) |
 | Snooze | `h` then 1/2/3. Leaves the count, shows "N snoozed", returns when due | `inbox-mock`; return in `model.test.ts` |
-| Peek | `p`: the session beside the card, following along. The draft stays | `inbox-mock`, `inbox-live` |
+| Peek | `p`: the session beside the card, following along, with work folded into one line that opens on a click. The draft stays | `inbox-mock`, `inbox-live` |
+| How a turn ended | An interrupted or failed agent says so on the card and in the peek, whatever its title still claims | `inbox-mock`; rule in `model.test.ts` |
 | Drafts | Walking away and back keeps what you wrote | `inbox-mock` |
 | Typing is safe | No shortcut fires in the note, so a dictation tool can type there | `inbox-mock` |
 | Agents on their own screen | Trust prompt and similar: shows the screen, offers Open session, no reply box | By hand on a fresh dev box. No scenario yet |

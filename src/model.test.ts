@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { screenFoot, answerFor, choicesOnScreen, cleanTitle, denyChoice, didntLand, estimate, holdCurrent, inList, type Item, isRecommended, itemsOf, NO_MARKS, oneLine, openForm, openItems, permissionChoices, resolvedAnswers, RESOLVED_LINE, SENT_GRACE_MS, shownLabel, snoozeTimes, trackGone, walkOrder } from "./model.ts";
+import { howItEnded, peekRows, screenFoot, answerFor, choicesOnScreen, cleanTitle, denyChoice, didntLand, estimate, holdCurrent, inList, type Item, isRecommended, itemsOf, NO_MARKS, oneLine, openForm, openItems, permissionChoices, resolvedAnswers, RESOLVED_LINE, SENT_GRACE_MS, shownLabel, snoozeTimes, trackGone, walkOrder } from "./model.ts";
 
 const waiting = (name: string, extra = {}) => ({ name, agent: "claude", agent_state: "waiting", state_since: "2026-01-01T10:00:00Z", turn: `${name}#1`, ...extra });
 
@@ -162,4 +162,22 @@ test("a screen's foot drops rules and blank lines", () => {
 test("a form's question isn't repeated as the reason it asks, and a command is", () => {
   assert.equal(one(waiting("a", { ask: { tool: "AskUserQuestion", input: "Which?" } }))[0].why, undefined);
   assert.equal(one(waiting("a", { ask: { tool: "Bash", input: "pnpm test" } }))[0].why, "Bash: pnpm test");
+});
+
+test("how a turn ended counts only when it's the last thing, and the title can't claim otherwise", () => {
+  assert.equal(howItEnded([{ kind: "text", id: "1", text: "hm" }, { kind: "notice", id: "2", notice: "interrupted", text: "Interrupted" }]), "It was interrupted, and waits for what to do instead.");
+  assert.equal(howItEnded([{ kind: "notice", id: "1", notice: "interrupted" }, { kind: "text", id: "2", text: "back at it" }]), undefined);
+  assert.equal(one({ name: "a", agent: "claude", agent_state: "finished", title: "❓ Old question" })[0].why, "Its title says it's asking");
+});
+
+test("the peek folds runs of work into one line, as the chat does", () => {
+  const rows = peekRows([
+    { kind: "user", id: "u" },
+    { kind: "tools", id: "t1", verb: "Run", items: [{ verb: "Run", target: "ls" }, { verb: "Run", target: "pwd" }] },
+    { kind: "tools", id: "t2", verb: "Read", items: [{ verb: "Read", target: "a.ts" }] },
+    { kind: "edit", id: "e1", file: "a.ts" },
+    { kind: "text", id: "x", text: "done" },
+    { kind: "tools", id: "t3", verb: "Run" },
+  ]);
+  assert.deepEqual(rows.map((r) => (r.kind === "work" ? r.summary : r.item.kind)), ["user", "Worked · ran 2 commands, read 1 file, edited 1 file", "text", "Worked · ran 1 command"]);
 });
