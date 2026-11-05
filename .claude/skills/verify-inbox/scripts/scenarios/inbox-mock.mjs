@@ -35,10 +35,12 @@ const wrap = (plugin) => (berth) => {
     if (method === "POST" && path.endsWith("/answer")) { window.__inboxSent.push({ path, body }); return Promise.resolve({ answered: [] }); }
     return berth.api.request(box, method, path, body);
   };
-  // A session interrupted long ago, whose title still asks.
+  // A session interrupted earlier, whose title still asks. Its time is fixed, as
+  // a real session's is: an item's identity follows it.
+  const stoppedAt = new Date(Date.now() - 30_000).toISOString();
   api.sessions = async (box) => {
     const list = await berth.api.sessions(box);
-    return box === "devl" ? [...list, { name: "old-q", agent: "claude", agent_state: "finished", title: "❓ Pick a colour", location: "shop", state_since: new Date(Date.now() - 7_200_000).toISOString() }] : list;
+    return box === "devl" ? [...list, { name: "old-q", agent: "claude", agent_state: "finished", title: "❓ Pick a colour", location: "shop", state_since: stoppedAt }] : list;
   };
   const ctx = new Proxy(berth, { get: (t, k) => (k === "api" ? api : t[k]) });
   return plugin(ctx);
