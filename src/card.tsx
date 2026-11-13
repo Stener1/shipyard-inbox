@@ -3,6 +3,7 @@ import { Alert, AlertDescription, Badge, Button, Kbd, Skeleton, Textarea, cn } f
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
+import { LinkedText, WRAP } from "./linked-text.tsx";
 import { Markdown } from "./markdown.tsx";
 import { ago, closeKind, answerFor, type Choice, complete, didntLand, type GateLike, GROUPS, isRecommended, type Item, oneLine, type Pick, type Question, shownLabel, snoozeTimes } from "./model.ts";
 import { answerForm, decideGate, type Detail, errText, getState, loadDetail, openSession, closeSession, pressKey, reply, resume, snooze, subscribe } from "./store.ts";
@@ -166,6 +167,7 @@ export function Card({ berth, item, peekOpen, onPeek }: CardProps) {
   const waited = ago(item.since, state.now);
   const gate = item.kind === "gate" ? (item.source as GateLike).gate : undefined;
   const loading = detail?.loading && !form;
+  const openUrl = (url: string) => berth.openUrl(url);
 
   return (
     <div className="mx-auto flex w-full flex-col gap-4 p-4" style={{ maxWidth: 680 }} data-testid="inbox-card">
@@ -200,7 +202,7 @@ export function Card({ berth, item, peekOpen, onPeek }: CardProps) {
 
       {detail?.message && !form && (
         <div className="max-h-72 overflow-auto rounded-md border p-3 text-sm" data-testid="inbox-last-message">
-          <Markdown text={detail.message} openUrl={(u) => berth.openUrl(u)} />
+          <Markdown text={detail.message} openUrl={openUrl} />
         </div>
       )}
 
@@ -215,8 +217,10 @@ export function Card({ berth, item, peekOpen, onPeek }: CardProps) {
       )}
 
       {questions.map((q, i) => (
-        <fieldset key={i} className="flex flex-col gap-2" data-testid="inbox-question">
-          <legend className="pb-2 text-sm font-medium">{q.question}</legend>
+        <fieldset key={i} className="flex flex-col gap-2" style={{ ...WRAP, minWidth: 0 }} data-testid="inbox-question">
+          <legend className="pb-2 text-sm font-medium">
+            <LinkedText text={q.question} openUrl={openUrl} />
+          </legend>
           {q.options.map((o, n) => {
             const on = (draft.picks[i] ?? []).includes(o.label);
             return (
@@ -231,14 +235,20 @@ export function Card({ berth, item, peekOpen, onPeek }: CardProps) {
                 {i === focusQ && <Kbd>{n + 1}</Kbd>}
                 <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <span className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium">{shownLabel(o)}</span>
+                    <span className="font-medium">
+                      <LinkedText text={shownLabel(o)} openUrl={openUrl} />
+                    </span>
                     {isRecommended(o) && (
                       <Badge variant="secondary" data-testid="inbox-recommended">
                         Recommended
                       </Badge>
                     )}
                   </span>
-                  {o.description && <span className="text-xs text-muted-foreground">{o.description}</span>}
+                  {o.description && (
+                    <span className="text-xs text-muted-foreground">
+                      <LinkedText text={o.description} openUrl={openUrl} />
+                    </span>
+                  )}
                 </span>
               </button>
             );
