@@ -6,6 +6,7 @@
 | Moving around | `j`/`k`, click a row. A new item never replaces the card you're on | `inbox-mock`; rule in `model.test.ts` |
 | Walk-through | `w`: one card at a time, "N left, about M min", "1 of N" | `inbox-mock` |
 | Answering a form | Number keys pick, recommended is marked, Enter sends. Reaches the agent | `inbox-mock` (payload), `inbox-live` (both drivers) |
+| Links on a card | A bare http(s) address in the question, an option's label or description, or the message is an underlined link that opens the whole address. Clicking it, or Enter on it, inside an option never picks the option. An address the box cut short (`…` at the end) shows but doesn't link; code stays code; Markdown links still work. Long addresses wrap, so the card never scrolls sideways (1440px; 390px with Shipyard's sidebar hidden and walking through, since the list and sidebar alone leave a card 32px at that width). Keys other than Enter still work after a click focused a link | `inbox-mock` (cards "Pick the acme preview", "Where the acme previews are"); rules in `links.test.ts` |
 | A pick with a note | Note goes with the pick as one line, double quotes survive | `inbox-live` (both drivers) |
 | Permission prompts | Allow, Always allow, Deny, by key or click. The command runs | `inbox-live` (both drivers) |
 | Close session | Few seconds to undo. Nothing unsaved: it stops at once, with no agent turn. Unsaved work: the agent saves it and closes itself | `inbox-mock` (undo, stop), `inbox-live` (clean, form and permission, both drivers) |

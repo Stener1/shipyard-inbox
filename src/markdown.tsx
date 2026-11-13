@@ -1,33 +1,35 @@
 import { type ReactNode } from "react";
 
-// Enough Markdown to read an agent's message: paragraphs, headings as bold,
-// lists, fenced code, inline code, bold and links. It builds React nodes from
-// the text, so nothing an agent wrote is ever drawn as HTML.
+import { inlineParts } from "./links.ts";
+import { UrlLink, WRAP } from "./linked-text.tsx";
 
-const INLINE = /(`[^`\n]+`|\*\*[^*\n]+\*\*|\[[^\]\n]+\]\(https?:\/\/[^)\s]+\))/g;
+// Enough Markdown to read an agent's message: paragraphs, headings as bold,
+// lists, fenced code, inline code, bold and links, Markdown ones and bare
+// addresses (lib/links). It builds React nodes from the text, so nothing an
+// agent wrote is ever drawn as HTML.
 
 function inline(text: string, openUrl: (url: string) => void): ReactNode[] {
-  return text.split(INLINE).map((part, i) => {
-    if (part.startsWith("`") && part.endsWith("`") && part.length > 2)
+  return inlineParts(text).map((p, i) => {
+    if (p.kind === "code")
       return (
         <code key={i} className="rounded bg-muted px-1 font-mono text-[0.92em]">
-          {part.slice(1, -1)}
+          {p.text}
         </code>
       );
-    if (part.startsWith("**") && part.endsWith("**") && part.length > 4)
+    if (p.kind === "link")
       return (
-        <strong key={i} className="font-medium">
-          {part.slice(2, -2)}
-        </strong>
-      );
-    const link = part.match(/^\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)$/);
-    if (link)
-      return (
-        <button key={i} type="button" className="underline" onClick={() => openUrl(link[2])}>
-          {link[1]}
+        <button key={i} type="button" className="underline" onClick={() => openUrl(p.url)}>
+          {p.text}
         </button>
       );
-    return part;
+    const shown = p.url ? <UrlLink key={i} url={p.url} text={p.text} openUrl={openUrl} /> : p.text;
+    return p.kind === "bold" ? (
+      <strong key={i} className="font-medium">
+        {shown}
+      </strong>
+    ) : (
+      shown
+    );
   });
 }
 
@@ -71,5 +73,5 @@ export function Markdown({ text, openUrl }: { text: string; openUrl: (url: strin
       blocks.push(<p key={i}>{inline(para.join(" "), openUrl)}</p>);
     }
   }
-  return <div className="flex min-w-0 flex-col gap-2 break-words">{blocks}</div>;
+  return <div className="flex min-w-0 flex-col gap-2" style={WRAP}>{blocks}</div>;
 }
